@@ -1,4 +1,5 @@
 ﻿#include "TFFNet.h"
+#include "TTrainingData.h"
 #include <iostream>
 #include <vector>
 #include <string>
@@ -6,7 +7,7 @@
 #include "armadillo"
 
 using namespace std;
-using namespace arma;
+//using namespace arma;
 
 // Загрузка сети из файла
 void TFFNet::loadNetwork(istream& inputSource){
@@ -45,11 +46,29 @@ void TFFNet::printNetwork(std::ostream& outputSource){
   for (int currentLayer = 0; currentLayer < layersQuantity; ++currentLayer){
     for (int currentPostNeuron = 1; currentPostNeuron <= neuronsDistribution[currentLayer + 1]; ++currentPostNeuron){
       for (int currentPreNeuron = 0; currentPreNeuron <= neuronsDistribution[currentLayer]; ++currentPreNeuron)
-        outputSource << weightsMatrices[currentLayer](currentPostNeuron - 1, currentPreNeuron);
+        outputSource << weightsMatrices[currentLayer](currentPostNeuron - 1, currentPreNeuron)  << "\t";
       outputSource << endl;
     }
     outputSource << endl;
   }
+}
+
+// Генерация сети со случайными весами
+// layersQuantity - кол-во слоев, не считая входного; weightsInitValue - дипапазон рандомизации весов связей (-weightsInitValue; weightsInitValue)
+void TFFNet::generateRandomNet(int _layersQuantity, const std::vector<int>& _neuronsDistribution, double weightsInitValue /*=0.1*/){
+  layersQuantity = _layersQuantity;
+  weightsMatrices.resize(layersQuantity);
+  neuronsDistribution = _neuronsDistribution;
+
+  for (int currentLayer = 0; currentLayer < layersQuantity; ++currentLayer){
+    weightsMatrices[currentLayer] = arma::randu< arma::Mat<double> >(neuronsDistribution[currentLayer + 1], neuronsDistribution[currentLayer] + 1);
+    // Armagillo генерирует случаные матрицы в диапазоне [0, 1] - приводим к нужному нам диапазону
+    weightsMatrices[currentLayer] = weightsMatrices[currentLayer] * (2 * weightsInitValue) -  weightsInitValue; 
+  }
+  // Создаем структуру выходов нейронов
+  neuronsOutputs.resize(layersQuantity + 1);
+  for (int currentLayer = 0; currentLayer <= layersQuantity; ++currentLayer)
+    neuronsOutputs[currentLayer].resize(neuronsDistribution[currentLayer], 0);
 }
 
 // Обсчет сети (возвращает выход сети)
@@ -60,16 +79,44 @@ vector<double> TFFNet::calculate(const vector<double>& inputVector){
   vector<double> extraInputVector;
   extraInputVector.push_back(1);
   extraInputVector.insert(extraInputVector.end(), inputVector.begin(), inputVector.end());
-  Col<double> inputToLayer = conv_to< Col<double> >::from(extraInputVector);
+  arma::Col<double> inputToLayer = arma::conv_to< arma::Col<double> >::from(extraInputVector);
 
   for (int currentLayer = 0; currentLayer < layersQuantity; ++currentLayer){
-    Col<double> layerOutput = logisticFunc(weightsMatrices[currentLayer] * inputToLayer); 
-    neuronsOutputs[currentLayer + 1] = conv_to< vector<double> >::from(layerOutput);
+    arma::Col<double> layerOutput = logisticFunc(weightsMatrices[currentLayer] * inputToLayer); 
+    neuronsOutputs[currentLayer + 1] = arma::conv_to< vector<double> >::from(layerOutput);
     // Заполняем вход для следующего слоя
     inputToLayer.resize(neuronsDistribution[currentLayer + 1] + 1);
     inputToLayer(0) = 1;
     inputToLayer.subvec(1, neuronsDistribution[currentLayer + 1]) = layerOutput;
   }
   return neuronsOutputs[layersQuantity];
+}
+
+// Подсчет локальных градиентов для всех нейронов сети (при алгоритме обратного распространения)
+vector< vector<double> >  TFFNet::calculateLocalGradients(const vector<double>& desiredOutput) const{
+  vector< vector<double> > localGradients(layersQuantity);
+  //for (int currentLayer = 0; currentLayer < layersQuantity; ++currentLayer)
+  //  localGradients[currentLayer].resize(neuronsDistribution[currentLayer])
+  // Вычисляем для выходного слоя
+  for (int currentOutput = 0; currentOutput < neuronsDistribution[layersQuantity]; ++currentOutput)
+    localGradients[layersQuantity - 1].push_back((desiredOutput[currentOutput] - neuronsOutputs[layersQuantity][currentOutput]) * 
+      derLogisticFunc(neuronsOutputs[layersQuantity][currentOutput]));
+  // Теперь вычисляем последовательно для всех слоев
+  for (int currentLayer = layersQuantity - 1; currentLayer > 0; --currentLayer)
+    // Получаем локальные градиенты транспонируя матрицу весов и перемножая с локальными градиентами следующего слоя, а потом каждый элемент с производной по выходу
+    localGradients[currentLayer - 1] = arma::conv_to< vector<double> >::from(
+      (strans(weightsMatrices[currentLayer]) * arma::conv_to< arma::Col<double> >::from(localGradients[currentLayer])) % 
+      derLogisticFunc(arma::conv_to< arma::Col<double> >::from(neuronsOutputs[currentLayer])));
+  return localGradients;
+}
+
+// Модификация весов сети - передается "матрица" локальных градиентов нейронов сети
+void TFFNet::modifyWeights(const vector< vector<double> >& localGradients, double learningRate /*=0.1*/){
+  for (int currentLayer = 0; currentLayer < layersQuantity; ++currentLayer){
+    arma::Row<double> outputs(neuronsDistribution[currentLayer + 1] + 1);
+    outputs(0) = 1;
+    outputs.subvec(1, neuronsDistribution[currentLayer + 1]) = arma::conv_to< arma::Row<double> >::from(neuronsOutputs[currentLayer + 1]);
+    weightsMatrices[currentLayer] -= learningRate * (arma::conv_to< arma::Col<double> >::from(localGradients[currentLayer]) * outputs);
+  }
 }
 

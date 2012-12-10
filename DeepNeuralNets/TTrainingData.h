@@ -6,11 +6,14 @@
 
 // Класс обучающих/тестовых выброк
 class TTrainingData{
+public:
   // Структура примера обучающей выборки
   struct STrainingExample{
     std::vector<double> input;
     std::vector<double> output;
   };
+
+private:
   // Обучающее множество
   std::vector<STrainingExample> dataSet;
   // Размер обучающего множества

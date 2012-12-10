@@ -18,10 +18,25 @@ class TFFNet{
   // Текущие выходы нейронов во всех слоях
   std::vector< std::vector<double> > neuronsOutputs;
 
-  // Функция выхода логистической функции (на векторе)
-  arma::Col<double> logisticFunc(const arma::Col<double>& inputCol, int slope = 2){
+  // Функция выхода логистической функции (на векторе - то есть сразу для всего слоя нейронов)
+  arma::Col<double> logisticFunc(const arma::Col<double>& inputCol, int slope = 2) const{
     return 1 / (exp(inputCol * -slope) + 1);
   }
+  // Функция производной логистической функции (сразу для всего слоя нейронов - передаются текущие выходы нейронов)
+  arma::Col<double> derLogisticFunc(const arma::Col<double>& inputCol, int slope = 2) const{
+    return slope * ((1 - inputCol) % inputCol);
+  }
+
+  // Функция производной логистической функции на одном числе (передается текущий выход нейрона)
+  double derLogisticFunc(double x, int slope = 2) const{
+    return slope * (1 - x) * x;
+  }
+
+  // Подсчет локальных градиентов для всех нейронов сети (при алгоритме обратного распространения)
+  std::vector< std::vector<double> > calculateLocalGradients(const std::vector<double>& desiredOutput) const;
+  // Модификация весов сети - передается "матрица" локальных градиентов нейронов сети
+  void modifyWeights(const std::vector< std::vector<double> >& localGradients, double learningRate = 0.1);
+
 
 public:
   TFFNet(){
@@ -47,6 +62,10 @@ public:
   void loadNetwork(std::istream& inputSource);
   // Выгрузка сети в файл
   void printNetwork(std::ostream& outputSource);
+  // Генерация сети со случайными весами
+  // layersQuantity - кол-во слоев, не считая входного; weightsInitValue - дипапазон рандомизации весов связей (-weightsInitValue; weightsInitValue)
+  void generateRandomNet(int _layersQuantity, const std::vector<int>& _neuronsDistribution, double weightsInitValue = 0.1);
+
   // Обсчет сети (возвращает выход сети)
   std::vector<double> calculate(const std::vector<double>& inputVector);
 
