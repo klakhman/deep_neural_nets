@@ -1,2 +1,3 @@
-deep_neural_nets
-================
+Library for working with and training deep neural networks
+==========================================================
+Description will be available soon...
