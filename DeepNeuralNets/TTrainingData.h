@@ -32,6 +32,12 @@ public:
 
   // Загрузка обучающей выборки
   void loadTrainingSet(std::istream& inputSource);
+  // Получение кол-ва примеров выборки
+  int getTrainingDataSize() const { return trainingDataSize; }
+  // Получение примера обучающей выборки
+  const STrainingExample& getTrainingExample(int exampleNumber) const { 
+    return dataSet[exampleNumber - 1];
+  }
 
 };
 

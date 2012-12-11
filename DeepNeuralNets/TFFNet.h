@@ -5,6 +5,8 @@
 #include <vector>
 #include "armadillo"
 
+class TTrainingData;
+
 // Класс нейронной сети прямого распространения
 class TFFNet{
   // Матрицы весов связей между слоями
@@ -16,7 +18,7 @@ class TFFNet{
   // Кол-во слоев в сети (не считая входной)
   int layersQuantity;
   // Текущие выходы нейронов во всех слоях
-  std::vector< std::vector<double> > neuronsOutputs;
+  std::vector< arma::Col<double> > neuronsOutputs;
 
   // Функция выхода логистической функции (на векторе - то есть сразу для всего слоя нейронов)
   arma::Col<double> logisticFunc(const arma::Col<double>& inputCol, int slope = 2) const{
@@ -33,10 +35,12 @@ class TFFNet{
   }
 
   // Подсчет локальных градиентов для всех нейронов сети (при алгоритме обратного распространения)
-  std::vector< std::vector<double> > calculateLocalGradients(const std::vector<double>& desiredOutput) const;
-  // Модификация весов сети - передается "матрица" локальных градиентов нейронов сети
-  void modifyWeights(const std::vector< std::vector<double> >& localGradients, double learningRate = 0.1);
-
+  std::vector< arma::Col<double> > calculateLocalGradients(const std::vector<double>& desiredOutput) const;
+  // Подсчет модификации весов сети на одном примере - передается "матрица" локальных градиентов нейронов сети, возвращает ошибку на примере
+  double getWeightsDelta_SingleSample(std::vector< arma::Mat<double> >& weightsDelta, 
+                                      const std::vector<double>& input, const std::vector<double>& desiredOutput, double learningRate = 0.1);
+  // Подсчет модификации весов сети в пакетном режиме на все обучающем мн-ве - возвращает значение ошибки до обучения
+  double getWeightsDelta_BatchSet(std::vector< arma::Mat<double> >& weightsDelta, const TTrainingData& trainingSet, double learningRate = 0.1);
 
 public:
   TFFNet(){
@@ -75,8 +79,10 @@ public:
       std::cout << "Error: Trying to access layer beyond the existing..." << std::endl;
       exit(1);
     }
-    return neuronsOutputs[layersQuantity];
+    return arma::conv_to< std::vector<double> >::from(neuronsOutputs[layersQuantity]);
   }
+  // Обучение сети классическим методом обратного распространения ошибки
+  void trainBackProp(const TTrainingData& trainingSet, int trainingEpochsQuantity, double learningRate = 0.1);
 
 };
 
