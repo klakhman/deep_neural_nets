@@ -7,7 +7,11 @@
 #include "armadillo"
 
 using namespace std;
-//using namespace arma;
+
+// TODO (11.12.12): 
+// 1) Заменить везде arma::Mat::resize() на ::set_size (работает быстрее)
+// 2) Заменить везде где возможно (размер матрицы изначально установлен и известен) заменить простое присваинвание на присваивание 
+//    с указанием диапазона левого операнда (submat() или subvec()) - это скорее всего должно работать быстрее
 
 // Загрузка сети из файла
 void TFFNet::loadNetwork(istream& inputSource){
@@ -33,7 +37,7 @@ void TFFNet::loadNetwork(istream& inputSource){
   // Создаем структуру выходов нейронов
   neuronsOutputs.resize(layersQuantity + 1);
   for (int currentLayer = 0; currentLayer <= layersQuantity; ++currentLayer){
-    neuronsOutputs[currentLayer].resize(neuronsDistribution[currentLayer]);
+    neuronsOutputs[currentLayer].set_size(neuronsDistribution[currentLayer]);
     neuronsOutputs[currentLayer].fill(0);
   }
 }
@@ -70,7 +74,7 @@ void TFFNet::generateRandomNet(int _layersQuantity, const std::vector<int>& _neu
   // Создаем структуру выходов нейронов
   neuronsOutputs.resize(layersQuantity + 1);
   for (int currentLayer = 0; currentLayer <= layersQuantity; ++currentLayer){
-    neuronsOutputs[currentLayer].resize(neuronsDistribution[currentLayer]);
+    neuronsOutputs[currentLayer].set_size(neuronsDistribution[currentLayer]);
     neuronsOutputs[currentLayer].fill(0);
   }
 }
@@ -84,7 +88,7 @@ vector<double> TFFNet::calculate(const vector<double>& inputVector){
 
   for (int currentLayer = 0; currentLayer < layersQuantity; ++currentLayer){
     // Заполняем вход для следующего слоя
-    inputToLayer.resize(neuronsDistribution[currentLayer] + 1);
+    inputToLayer.set_size(neuronsDistribution[currentLayer] + 1);
     inputToLayer(0) = 1;
     inputToLayer.subvec(1, neuronsDistribution[currentLayer]) = neuronsOutputs[currentLayer];
     neuronsOutputs[currentLayer + 1].subvec(0, neuronsDistribution[currentLayer + 1] - 1) = logisticFunc(weightsMatrices[currentLayer] * inputToLayer); 
@@ -131,10 +135,11 @@ double TFFNet::getWeightsDelta_SingleSample(vector< arma::Mat<double> >& weights
 // Подсчет модификации весов сети в пакетном режиме на все обучающем мн-ве - возвращает значение ошибки до обучения
 double TFFNet::getWeightsDelta_BatchSet(vector< arma::Mat<double> >& weightsDelta, const TTrainingData& trainingSet, double learningRate /*=0.1*/){
   double squareError = 0;
-  vector< arma::Mat<double> > singleSampleDelta(layersQuantity);
-  for (int currentLayer = 0; currentLayer < layersQuantity; ++currentLayer)
+  for (int currentLayer = 0; currentLayer < layersQuantity; ++currentLayer){
+    weightsDelta[currentLayer].set_size(neuronsDistribution[currentLayer + 1], neuronsDistribution[currentLayer] + 1);
     weightsDelta[currentLayer].fill(0);
-
+  }
+  vector< arma::Mat<double> > singleSampleDelta(layersQuantity);
   for (int currentSample = 0; currentSample < trainingSet.getTrainingDataSize(); ++currentSample){
     squareError += getWeightsDelta_SingleSample(singleSampleDelta, trainingSet.getTrainingExample(currentSample + 1).input,
                    trainingSet.getTrainingExample(currentSample + 1).output, learningRate) / trainingSet.getTrainingDataSize();
@@ -147,9 +152,7 @@ double TFFNet::getWeightsDelta_BatchSet(vector< arma::Mat<double> >& weightsDelt
 // Обучение сети классическим методом обратного распространения ошибки
 void TFFNet::trainBackProp(const TTrainingData& trainingSet, int trainingEpochsQuantity, double learningRate /*=0.1*/){
   vector< arma::Mat<double> > weightsDelta(layersQuantity);
-  for (int currentLayer = 0; currentLayer < layersQuantity; ++currentLayer)
-    weightsDelta[currentLayer].resize(neuronsDistribution[currentLayer + 1], neuronsDistribution[currentLayer] + 1);
-  
+   
   for (int trainingEpoch = 0; trainingEpoch < trainingEpochsQuantity; ++trainingEpoch){
     double squareError = getWeightsDelta_BatchSet(weightsDelta, trainingSet);
     for (int currentLayer = 0; currentLayer < layersQuantity; ++currentLayer)
